@@ -25,7 +25,8 @@ object EndpointsGenerator {
           q"import endpoints.algebra.Documentation",
           q"import endpoints.xhr",
           q"import io.circe.{parser, Decoder => CirceDecoder, Encoder => CirceEncoder}",
-          q"import org.scalajs.dom.raw.XMLHttpRequest"
+          q"import org.scalajs.dom.raw.XMLHttpRequest",
+          q"import shapeless.{:+:, CNil, Coproduct}"
         )
       )
     def getFrameworkImplicits() = Target.pure(Some((q"EndpointsImplicits", q"""

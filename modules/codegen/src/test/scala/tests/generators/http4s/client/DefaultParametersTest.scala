@@ -183,6 +183,9 @@ class DefaultParametersTest extends AnyFunSuite with Matchers with SwaggerSpecRu
             case GetOrderByIdResponse.NotFound =>
               handleNotFound
           }
+
+          type CoproductType = Order :+: Unit :+: CNil
+          def toCoproduct: CoproductType = fold(value => Coproduct[CoproductType](value), Coproduct[CoproductType](()), Coproduct[CoproductType](()))
         }
       """,
       q"""object GetOrderByIdResponse {
@@ -196,6 +199,9 @@ class DefaultParametersTest extends AnyFunSuite with Matchers with SwaggerSpecRu
             case DeleteOrderResponse.BadRequest => handleBadRequest
             case DeleteOrderResponse.NotFound => handleNotFound
           }
+
+          type CoproductType = Unit :+: CNil
+          def toCoproduct: CoproductType = fold(Coproduct[CoproductType](()), Coproduct[CoproductType](()))
         }
       """,
       q"""object DeleteOrderResponse {

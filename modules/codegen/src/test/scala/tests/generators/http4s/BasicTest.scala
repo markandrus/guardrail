@@ -206,6 +206,9 @@ class BasicTest extends AnyFunSuite with Matchers with SwaggerSpecRunner {
           def fold[A](handleOk: => A): A = this match {
             case GetBarResponse.Ok => handleOk
           }
+
+          type CoproductType = Unit :+: CNil
+          def toCoproduct: CoproductType = fold(Coproduct[CoproductType](()))
         }
       """,
       q"""object GetBarResponse { case object Ok extends GetBarResponse }""",
@@ -215,6 +218,9 @@ class BasicTest extends AnyFunSuite with Matchers with SwaggerSpecRunner {
             case x: GetBazResponse.Ok =>
               handleOk(x.value)
           }
+
+          type CoproductType = io.circe.Json :+: CNil
+          def toCoproduct: CoproductType = fold(value => Coproduct[CoproductType](value))
         }
       """,
       q"""object GetBazResponse { case class Ok(value: io.circe.Json) extends GetBazResponse }""",
@@ -223,6 +229,9 @@ class BasicTest extends AnyFunSuite with Matchers with SwaggerSpecRunner {
           def fold[A](handleOk: => A): A = this match {
             case PostFooResponse.Ok => handleOk
           }
+
+          type CoproductType = Unit :+: CNil
+          def toCoproduct: CoproductType = fold(Coproduct[CoproductType](()))
         }
       """,
       q"""object PostFooResponse { case object Ok extends PostFooResponse }""",
@@ -231,6 +240,9 @@ class BasicTest extends AnyFunSuite with Matchers with SwaggerSpecRunner {
           def fold[A](handleOk: => A): A = this match {
             case GetFooResponse.Ok => handleOk
           }
+
+          type CoproductType = Unit :+: CNil
+          def toCoproduct: CoproductType = fold(Coproduct[CoproductType](()))
         }
       """,
       q"""object GetFooResponse { case object Ok extends GetFooResponse }""",
@@ -239,6 +251,9 @@ class BasicTest extends AnyFunSuite with Matchers with SwaggerSpecRunner {
           def fold[A](handleOk: => A): A = this match {
             case PutFooResponse.Ok => handleOk
           }
+
+          type CoproductType = Unit :+: CNil
+          def toCoproduct: CoproductType = fold(Coproduct[CoproductType](()))
         }
       """,
       q"""object PutFooResponse { case object Ok extends PutFooResponse }""",
@@ -247,6 +262,9 @@ class BasicTest extends AnyFunSuite with Matchers with SwaggerSpecRunner {
           def fold[A](handleOk: => A): A = this match {
             case PatchFooResponse.Ok => handleOk
           }
+
+          type CoproductType = Unit :+: CNil
+          def toCoproduct: CoproductType = fold(Coproduct[CoproductType](()))
         }
       """,
       q"""object PatchFooResponse { case object Ok extends PatchFooResponse }""",
@@ -255,6 +273,9 @@ class BasicTest extends AnyFunSuite with Matchers with SwaggerSpecRunner {
           def fold[A](handleOk: => A): A = this match {
             case DeleteFooResponse.Ok => handleOk
           }
+
+          type CoproductType = Unit :+: CNil
+          def toCoproduct: CoproductType = fold(Coproduct[CoproductType](()))
         }
       """,
       q"""object DeleteFooResponse { case object Ok extends DeleteFooResponse }"""

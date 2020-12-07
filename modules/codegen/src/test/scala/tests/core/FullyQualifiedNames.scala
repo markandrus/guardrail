@@ -69,6 +69,9 @@ class FullyQualifiedNames extends AnyFunSuite with Matchers with SwaggerSpecRunn
           case x: GetUserResponse.Ok =>
             handleOk(x.value)
           }
+
+          type CoproductType = _root_.com.test.User :+: CNil
+          def toCoproduct: CoproductType = fold(value => Coproduct[CoproductType](value))
         }
        """
 

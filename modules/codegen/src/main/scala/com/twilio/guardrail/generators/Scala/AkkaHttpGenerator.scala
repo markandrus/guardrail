@@ -42,7 +42,8 @@ object AkkaHttpGenerator {
           q"import java.io.File",
           q"import java.security.MessageDigest",
           q"import java.util.concurrent.atomic.AtomicReference",
-          q"import scala.util.{Failure, Success}"
+          q"import scala.util.{Failure, Success}",
+          q"import shapeless.{:+:, CNil, Coproduct}"
         ) ++ (modelGeneratorType match {
               case _: CirceModelGenerator => List(q"import io.circe.Decoder")
               case JacksonModelGenerator  => List()
