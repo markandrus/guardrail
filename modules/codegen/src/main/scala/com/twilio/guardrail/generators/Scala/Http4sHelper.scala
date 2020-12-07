@@ -1,7 +1,7 @@
 package com.twilio.guardrail.generators.Scala
 
 import com.twilio.guardrail.languages.ScalaLanguage
-import com.twilio.guardrail.protocol.terms.{ApplicationJson, ContentType, Response, Responses}
+import com.twilio.guardrail.protocol.terms.{ ApplicationJson, ContentType, Response, Responses }
 import com.twilio.guardrail.StrictProtocolElems
 
 import scala.meta._
@@ -52,24 +52,29 @@ object Http4sHelper {
     val (coproductTypesWithDuplicates, foldToCoproductCases) = responses.value
       .map({
         case Response(_, valueType, headers) =>
-          val allParams = valueType.map(tpe => (tpe, q"value")).toList ++ headers.value.map(h => (h.tpe, h.term))
+          val allParams                      = valueType.map(tpe => (tpe, q"value")).toList ++ headers.value.map(h => (h.tpe, h.term))
           val (allParamTypes, allParamTerms) = allParams.unzip
           val (allParamsType, allParamsTerm) = (allParamTypes, allParamTerms) match {
-            case (       Nil,           _) => (      t"Unit",          q"()")
-            case (tpe :: Nil, term :: Nil) => (          tpe,           term)
-            case (     types,       terms) => (t"(..$types)",  q"(..$terms)")
+            case (Nil, _)                  => (t"Unit", q"()")
+            case (tpe :: Nil, term :: Nil) => (tpe, term)
+            case (types, terms)            => (t"(..$types)", q"(..$terms)")
           }
 
           if (allParams.isEmpty && !isGeneric) (allParamsType, q"Coproduct[CoproductType]($allParamsTerm)")
-          else                                 (allParamsType, q"(..${allParamTerms.map(term => param"$term")}) => Coproduct[CoproductType]($allParamsTerm)")
+          else (allParamsType, q"(..${allParamTerms.map(term => param"$term")}) => Coproduct[CoproductType]($allParamsTerm)")
       })
       .unzip
 
     // We unfortunately lack distinctBy
-    val coproductType = coproductTypesWithDuplicates.foldRight[(Type, Set[String])]((t"CNil", Set[String]()))((x, xsAndTypes) => xsAndTypes match {
-      case (xs, types) if !types.contains(x.toString()) => (t"$x :+: $xs", types + x.toString())
-      case _                                            => xsAndTypes
-    })._1
+    val coproductType = coproductTypesWithDuplicates
+      .foldRight[(Type, Set[String])]((t"CNil", Set[String]()))(
+        (x, xsAndTypes) =>
+          xsAndTypes match {
+            case (xs, types) if !types.contains(x.toString()) => (t"$x :+: $xs", types + x.toString())
+            case _                                            => xsAndTypes
+          }
+      )
+      ._1
 
     val companion = q"""
             object ${Term.Name(responseClsName)} {
