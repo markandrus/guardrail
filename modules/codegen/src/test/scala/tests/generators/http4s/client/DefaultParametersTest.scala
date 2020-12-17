@@ -184,14 +184,22 @@ class DefaultParametersTest extends AnyFunSuite with Matchers with SwaggerSpecRu
               handleNotFound
           }
 
-          type CoproductType = Order :+: Unit :+: CNil
-          def toCoproduct: CoproductType = fold(value => Coproduct[CoproductType](value), Coproduct[CoproductType](()), Coproduct[CoproductType](()))
+          import GetOrderByIdResponse._
+          def toUnion: UnionType = fold(value => Coproduct[UnionType](200 ->> createOkRecord(value)), Coproduct[UnionType](400 ->> createBadRequestRecord(())), Coproduct[UnionType](404 ->> createNotFoundRecord(())))
         }
       """,
       q"""object GetOrderByIdResponse {
       case class Ok(value: Order) extends GetOrderByIdResponse
       case object BadRequest extends GetOrderByIdResponse
       case object NotFound extends GetOrderByIdResponse
+
+      type OkRecord = FieldType[Witness.`'value`.T, Order] :: HNil
+      type BadRequestRecord = FieldType[Witness.`'value`.T, Unit] :: HNil
+      type NotFoundRecord = FieldType[Witness.`'value`.T, Unit] :: HNil
+      def createOkRecord(value: Order): OkRecord = ('value ->> value) :: HNil
+      def createBadRequestRecord(value: Unit): BadRequestRecord = ('value ->> value) :: HNil
+      def createNotFoundRecord(value: Unit): NotFoundRecord = ('value ->> value) :: HNil
+      type UnionType = FieldType[Witness.`200`.T, OkRecord] :+: FieldType[Witness.`400`.T, BadRequestRecord] :+: FieldType[Witness.`404`.T, NotFoundRecord] :+: CNil
     }""",
       q"""
         sealed abstract class DeleteOrderResponse {
@@ -200,19 +208,30 @@ class DefaultParametersTest extends AnyFunSuite with Matchers with SwaggerSpecRu
             case DeleteOrderResponse.NotFound => handleNotFound
           }
 
-          type CoproductType = Unit :+: CNil
-          def toCoproduct: CoproductType = fold(Coproduct[CoproductType](()), Coproduct[CoproductType](()))
+          import DeleteOrderResponse._
+          def toUnion: UnionType = fold(Coproduct[UnionType](400 ->> createBadRequestRecord(())), Coproduct[UnionType](404 ->> createNotFoundRecord(())))
         }
       """,
       q"""object DeleteOrderResponse {
       case object BadRequest extends DeleteOrderResponse
       case object NotFound extends DeleteOrderResponse
+
+      type BadRequestRecord = FieldType[Witness.`'value`.T, Unit] :: HNil
+      type NotFoundRecord = FieldType[Witness.`'value`.T, Unit] :: HNil
+      def createBadRequestRecord(value: Unit): BadRequestRecord = ('value ->> value) :: HNil
+      def createNotFoundRecord(value: Unit): NotFoundRecord = ('value ->> value) :: HNil
+      type UnionType = FieldType[Witness.`400`.T, BadRequestRecord] :+: FieldType[Witness.`404`.T, NotFoundRecord] :+: CNil
     }"""
     )
 
     cls.head.right.get.structure should equal(clientClass.structure)
     cmp.structure should equal(clientCompanion.structure)
 
-    statements.zip(expected).foreach({ case (a, b) => a.structure should equal(b.structure) })
+    // statements.zip(expected).foreach({ case (a, b) => a.structure should equal(b.structure) })
+    statements.zip(expected).foreach({ case (a, b) =>
+      System.out.println(s">>> a: $a")
+      System.out.println(s">>> b: $b")
+      a.structure should equal(b.structure)
+    })
   }
 }

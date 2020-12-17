@@ -48,37 +48,75 @@ object Http4sHelper {
 
     val (foldParams, foldCases) = foldPair.unzip
 
-    // Coproduct
-    val (coproductTypesWithDuplicates, foldToCoproductCases) = responses.value
+    // Union
+    val recordTypeDefns = responses.value
       .map({
-        case Response(_, valueType, headers) =>
-          val allParams                      = valueType.map(tpe => (tpe, q"value")).toList ++ headers.value.map(h => (h.tpe, h.term))
-          val (allParamTypes, allParamTerms) = allParams.unzip
-          val (allParamsType, allParamsTerm) = (allParamTypes, allParamTerms) match {
-            case (Nil, _)                  => (t"Unit", q"()")
-            case (tpe :: Nil, term :: Nil) => (tpe, term)
-            case (types, terms)            => (t"(..$types)", q"(..$terms)")
-          }
-
-          if (allParams.isEmpty && !isGeneric) (allParamsType, q"Coproduct[CoproductType]($allParamsTerm)")
-          else (allParamsType, q"(..${allParamTerms.map(term => param"$term")}) => Coproduct[CoproductType]($allParamsTerm)")
+        case response @ Response(_, valueTypeO, headers) =>
+          val recordTypeName = s"${response.statusCodeName.value}Record"
+          val valueType = valueTypeO.getOrElse(t"Unit")
+          val valueField = ("value", valueType)
+          val headerFields = headers.value.map(header => (header.term.value, header.tpe))
+          val fields = valueField :: headerFields
+          makeRecordDefn(recordTypeName, fields)
       })
-      .unzip
 
-    // We unfortunately lack distinctBy
-    val coproductType = coproductTypesWithDuplicates
-      .foldRight[(Type, Set[String])]((t"CNil", Set[String]()))(
-        (x, xsAndTypes) =>
-          xsAndTypes match {
-            case (xs, types) if !types.contains(x.toString()) => (t"$x :+: $xs", types + x.toString())
-            case _                                            => xsAndTypes
+    val recordConstructors = responses.value
+      .map({
+        case response @ Response(_, valueTypeO, headers) =>
+          val recordType = Type.Name(s"${response.statusCodeName.value}Record")
+
+          val (valueParamName, valueParam) = {
+            val valueParamName = q"value"
+            val valueType = valueTypeO.getOrElse(t"Unit")
+            val valueParam = param"$valueParamName: $valueType"
+            (valueParamName, valueParam)
           }
-      )
-      ._1
+
+          val (headerParamNames, headerParams) = headers.value.map(header => {
+            val headerParamName = header.term
+            val headerType = header.tpe
+            val headerParam = param"$headerParamName: $headerType"
+            (headerParamName, headerParam)
+          }).unzip
+
+          val paramNames = valueParamName :: headerParamNames
+          val params = valueParam :: headerParams
+
+          val constructorName = Term.Name(s"create${response.statusCodeName.value}Record")
+          val constructorBody = paramNames.foldRight[Term](q"HNil")((paramName, tail) => {
+            val fieldName = Lit.Symbol(Symbol(paramName.value))
+            q"($fieldName ->> $paramName) :: $tail"
+          })
+
+          q"def $constructorName(..$params): $recordType = $constructorBody"
+      })
+
+    val unionTypeDefn = makeUnionDefn("UnionType", responses.value.map(response => {
+      val labelName = response.statusCode.toString
+      val recordType = Type.Name(s"${response.statusCodeName.value}Record")
+      (labelName, recordType)
+    }))
+
+    val foldToUnionCases = responses.value
+      .map({
+        case response @ Response(_, valueType, headers) =>
+          val params = valueType.map(_ => Term.Name("value")).toList ++ headers.value.map(_.term)
+          val terms = valueType.fold[Term](q"()")(_ => Term.Name("value")) :: headers.value.map(_.term)
+          val labelName = Lit.Int(response.statusCode)
+          val constructor = Term.Name(s"create${response.statusCodeName.value}Record")
+          if (params.isEmpty && !isGeneric) q"Coproduct[UnionType]($labelName ->> ${Term.Apply(constructor, terms)})"
+          else q"(..${params.map(param => param"$param")}) => Coproduct[UnionType]($labelName ->> ${Term.Apply(constructor, terms)})"
+      })
+
+    val toUnionDef = q"def toUnion: UnionType = ${Term.Apply(Term.Name("fold"), foldToUnionCases)}"
 
     val companion = q"""
             object ${Term.Name(responseClsName)} {
               ..$terms
+
+              ..$recordTypeDefns
+              ..$recordConstructors
+              $unionTypeDefn
             }
           """
 
@@ -86,8 +124,8 @@ object Http4sHelper {
         sealed abstract class ${responseSuperType}[..$extraTypeParams] {
           def fold[A](..${foldParams}): A = ${Term.Match(Term.This(Name("")), foldCases)}
 
-          type CoproductType = ${coproductType}
-          def toCoproduct: CoproductType = ${Term.Apply(Term.Name("fold"), foldToCoproductCases)}
+          import ${Term.Name(responseClsName)}._
+          $toUnionDef
         }
       """
     List[Defn](cls, companion)
@@ -145,4 +183,34 @@ object Http4sHelper {
           }
       }
     }
+
+  private def makeWitnessType(name: String): Type = {
+    val nameTerm = Term.Name(name)
+    val witnessTerm = q"Witness.$nameTerm"
+    Type.Select(witnessTerm, t"T")
+  }
+
+  private def makeFieldType(fieldName: String, fieldType: Type): Type = {
+    val witness = makeWitnessType(fieldName)
+    t"FieldType[$witness, $fieldType]"
+  }
+
+  private def makeRecordDefn(recordName: String, fields: List[(String, Type)]): Defn = {
+    val recordTypeName = Type.Name(recordName)
+    val recordType = fields.foldRight[Type](t"HNil")((field, tail) => {
+      val fieldName = s"'${field._1}"
+      val head = makeFieldType(fieldName, field._2)
+      t"$head :: $tail"
+    })
+    q"type $recordTypeName = $recordType"
+  }
+
+  private def makeUnionDefn(unionName: String, members: List[(String, Type)]): Defn = {
+    val unionTypeName = Type.Name(unionName)
+    val unionType = members.foldRight[Type](t"CNil")((member, tail) => {
+      val head = makeFieldType(member._1, member._2)
+      t"$head :+: $tail"
+    })
+    q"type $unionTypeName = $unionType"
+  }
 }
